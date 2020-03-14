@@ -1,436 +1,551 @@
+#Import the needed modules
 import random
 import math
 
-#A functions that gets user input and converts it into an integer. It returns
-#None if the number is invalid
-def InputInteger():
-	#Get the user input
-	val = input(">")
-	#Convert the input to an integer
-	try:
-		val = int(val)
-		#Return the value
-		return val
-	except:
-		#Unable to convert string to integer. Return None
-		return None
-
-#Represents the device in which the program is being run.
-#Because enums aren't supported in Casio's Python, constants are used.
+#A function that checks if the system the game is running on is a calculator or
+#a PC. Due to the lack of enums in CASIO's Python interpreter, constant values
+#are used instead.
 CASIO = 0
 PYTHON = 1
+def GetSystemType():
+	#Try to import a module that isn't available on CASIO calculators. If that
+	#succeeds, the program is running on a computer. If it doesn't, it is
+	#running on a calculator.
+	try:
+		import os
+		return PYTHON
+	except:
+		return CASIO
 
-#Analyse if the program is running on a computer or a calculator
-System = PYTHON
-try:
-	#Try to import the "os" module. If we were able to do that, we're running
-	#on a computer
+#A function that clears the screen in PCs. There is no error checking. The
+#programmer must make sure the game is running on a PC.
+def ClearScreen():
 	import os
-except:
-	#Unable to import the "os" module. Because it doesn't exist on Casio
-	#calculators, we can assume that the program is running in one of them.
-	System = CASIO
+	#On POSIX systems, use the clear command
+	if os.name == "posix":
+		os.system("clear")
+	elif os.name == "nt":
+		#On Windows, use the cls command
+		os.system("cls")
+	#The screen doesn't get cleared in calculators because what is printed to
+	#those must fill all the screen lines.
 
-#A function that clears the screen based on the current system
-def Clear():
-	if System == PYTHON:
-		#Clear the screen depending on the operating system
-		if os.name == "nt":
-			#Use the Windows "cls" command to clear the console
-			os.system("cls")
+#A function that gets a number from the user in a range. It returns None if the
+#number is invalid or not in the range. start and end are integers and the
+#limits of the range.
+def InputInteger(start : int, end : int):
+	#Get input from the user to know the number they chose
+	number = input(">")
+	#Convert the user input to a number
+	try:
+		number = int(number)
+		#The conversion to an integer was successful. See if the number is in
+		#the allowed range for the options.
+		if number >= start and number <= end:
+			#The number is inside the range. Return it.
+			return number
 		else:
-			#Use the POSIX "clear" command to clear the console
-			os.system("clear")
-	else:
-		#On calculators, print 8 empty lines because there's no way to clear
-		#the screen
-		for i in range(8):
-			print("")
+			#The number isn't in the range. Raise an exception.
+			raise Exception()
+	except:
+		#The number conversion failed or it succeeded but the number wasn't in
+		#the valid range. Return None.
+		return None
 
-#The information in a place in the board
+#A function that asks the user to pick one of many options. There is no error
+#checking. question must be a string and options must be an array of strings.
+#system must be CASIO or PYTHON.
+def UserQuestion(question : str, options : list, system : int):
+	#Ask the user the question until their input is valid
+	while True:
+		#In PCs, clear the screen
+		if system == PYTHON:
+			ClearScreen()
+		#Write the question
+		print(question)
+		#Write all the options
+		for i in range(len(options)):
+			#Write the option number and the option. 1 is added to the number
+			#so that the options don't start as zero like in arrays.
+			print(str(i + 1) + " - " + options[i])
+		#If we are in a CASIO calculator, fill the remaining lines. Only six
+		#out of the seven available lines can be filled with text because the
+		#last line has to be used for user input.
+		if system == CASIO:
+			remaining = 6 - (len(options) + 1)
+			for i in range(remaining):
+				print("")
+		#Ask the user to input a number between 1 and the number of options
+		number = InputInteger(1, len(options))
+		#If the number is valid, return it minus one because it must be an
+		#index of the array
+		if number is not None:
+			return number - 1
+		#The answer is invalid. Continue the loop and ask the user again.
+
+#The possible state of a slot in the board. Due to the lack of enums in CASIO
+#calculators, constants are used.
 NO_PLAYER = 0
 PLAYERX = 1
 PLAYERO = 2
 
-#Create the game board
-Board = [
-	[NO_PLAYER, NO_PLAYER, NO_PLAYER],
-	[NO_PLAYER, NO_PLAYER, NO_PLAYER],
-	[NO_PLAYER, NO_PLAYER, NO_PLAYER]
-]
-
-#A function that renders the board to the console
-def RenderBoard():
-	#Render every line
-	for i in range(3):
-		line = ""
-		#Render every piece slot in the line
-		for j in range(3):
-			#Add the character of the piece depending on the player there
-			if Board[i][j] == NO_PLAYER:
-				#Print the slot number
-				line += str(i * 3 + j + 1)
-			elif Board[i][j] == PLAYERO:
-				line += "O"
-			elif Board[i][j] == PLAYERX:
-				line += "X"
-			#Unless this is the edge of the board, draw the division between
-			#pieces
-			if j != 2:
-				line +=	"|"
-		print(line)
-		#Unless this is the edge of the board, draw the division between lines
-		if i != 2:
-			print("-----")
-
-#A function that checks if any player has won
-def PlayerWon():
-	#Check if any of the players won
-	for i in range(1, 3):
-		#Check if a row is filled up
-		for j in range(0, 3):
-			if Board[j] == [i, i, i]:
-				#The row is filled. Return that this player won
-				return i
-		#Check if a column is filled up
-		for j in range(0, 3):
-			if Board[0][j] == i and Board[1][j] == i and Board[2][j] == i:
-				#The column is filled
-				return i
-		#Check if any of the corners is done
-		if Board[1][1] == i and ((Board[0][0] == i and Board[2][2] == i) or \
-		(Board[2][0] == i and Board[0][2] == i)):
-			#The player won
-			return i
-	#Check if the board is full and nobody won
-	for i in range(0, 3):
-		for j in range(0, 3):
-			if Board[i][j] == NO_PLAYER:
-				#There's an empty slot. The game hasn't ended yet.
-				return -1
-	#It's a tie
-	return NO_PLAYER
-
-#A function that checks if a player is going to win
+#Values needed for the return values of Board.PlayerAlmostWinning. They
+#represent rows, columns and diagonals
 ROW = 0
 COLUMN = 1
 DIAGONAL = 2
-def PlayerAlmostWinning(player):
-	#Check if a row is almost filled up
-	for i in range(0, 3):
-		count = 0
-		for j in range(0, 3):
-			if Board[i][j] == player:
-				count += 1
-			elif Board[i][j] != NO_PLAYER:
-				count = -10
-		if count == 2:
-			#Two pieces filled. Return this	row
-			return [ROW, i]
-	#Check if a column is almost filled up
-	for i in range(0, 3):
-		count = 0
-		for j in range(0, 3):
-			if Board[j][i] == player:
-				count += 1
-			elif Board[j][i] != NO_PLAYER:
-				count = -10
-		if count == 2:
-			#Two pieces filled. Return this	column
-			return [COLUMN, i]
-	#Check if diagonals are almost filled up
-	count = 0
-	for i in range(0, 3):
-		if Board[i][i] == player:
-			count += 1
-		elif Board[i][i] != NO_PLAYER:
-			count = -10	
-	if count == 2:
-		return [DIAGONAL, 0]
-	count = 0
-	for i in range(0, 3):
-		if Board[2 - i][i] == player:
-			count += 1
-		elif Board[2 - i][i] != NO_PLAYER:
-			count = -10
-	if count == 2:
-		return [DIAGONAL, 1]			
 
-#Due to the lack of enums, single and multiplayer numbers
-SINGLE_PLAYER = 1
-MULTI_PLAYER = 2
+#A class that defines a game board
+class Board:
+	Slots = []
+	
+	#The constructor of a new board
+	def __init__(self):
+		#Initialize a board with nine slots
+		self.Slots = [NO_PLAYER] * 9
 
-#Know if the user wants single or multiplayer. Keep doing that if the user gets
-#it wrong.
-Players = -1
-while True:
-	#Clear the screen and ask the user
-	Clear()
-	print("Choose a mode:\n1 - Singleplayer\n2 - Multiplayer\n\n\n")
-	#Get the user's response
-	Players = InputInteger()
-	#Check if the value is valid
-	if Players == SINGLE_PLAYER or Players == MULTI_PLAYER:
-		#It is. Break out of the loop
-		break
+	#A function that renders the board to the console
+	def Render(self):
+		#Print every line
+		for i in range(3):
+			#The string that will be printed
+			text = ""
+			for j in range(3):
+				#Add the current slot to the string that will be printed based
+				#on the player (or lack of) there
+				if self.Slots[i * 3 + j] == NO_PLAYER:
+					text += str(i * 3 + j + 1)
+				elif self.Slots[i * 3 + j] == PLAYERX:
+					text += "X"
+				else:
+					text += "O"
+				#Unless this is the edge of the board, write a separator
+				if j != 2:
+					text += "|"
+			#Print the line
+			print(text)
+			#Unless this is the edge of the board, write a separator
+			if i != 2:
+				print("-----")
+
+	#Checks if a player won the game or if it is a tie. NO_PLAYER is returned
+	#if it's a tie and None is returned if the game hasn't ended yet.
+	def PlayerWon(self):
+		#Check if either X or O won
+		for player in [PLAYERX, PLAYERO]:
+			#Check if a row is filled with the player's pieces
+			for j in range(0, 9, 3):
+				if self.Slots[j] == self.Slots[j + 1] == self.Slots[j + 2] == \
+					player:
+					#The player filled this row. Return saying that they won
+					return player
+			#Check if a column is filled with the player's pieces
+			for j in range(3):
+				if self.Slots[j] == self.Slots[j + 3] == self.Slots[j + 6] == \
+					player:
+					#The player filled this column. Return saying that they won
+					return player
+			#Check if the diagonals are filled with the player's pieces
+			if self.Slots[4] == player and (self.Slots[0] == self.Slots[8] == \
+				player or self.Slots[2] == self.Slots[6] == player):
+				#One of the diagonals is filled. Return saying that the player
+				#won.
+				return player
+		#No match found. If the board is full, return that it's a tie.
+		for i in range(9):
+			if self.Slots[i] == NO_PLAYER:
+				#There is an empty slot. It isn't a tie.
+				return None
+		#It's a tie.
+		return NO_PLAYER
+
+	#A function that returns the list of places in the board with no player on
+	#them.
+	def EmptyPlaces(self):
+		#Create the list that will be returned
+		ret = []
+		#Loop through every piece in the board to find the ones without a
+		#player on them
+		for i in range(len(self.Slots)):
+			if self.Slots[i] == NO_PLAYER:
+				#There aren't players in the current place. Add it to the list.
+				ret.append(i)
+		#Return the list of places
+		return ret
+
+	#A function that checks if a player is almost winning (one piece away from
+	#doing it). It returns an array. The first element is whether there is an
+	#almost winning ROW, COLUMN or DIAGONAL. None is returned when the player
+	#isn't a piece away from victory.
+	def PlayerAlmostWinning(self, player : int):
+		#Check if any of the rows has 2 pieces from the player and no piece
+		#from the other player
+		for i in range(3):
+			#The number of pieces from the player
+			count = 0
+			#The location an empty place in this row
+			empty = -1
+			for j in range(3):
+				#Check for player pieces and enemy pieces
+				if self.Slots[i * 3 + j] == player:
+					#This is a piece from the player. Count it.
+					count += 1
+				elif self.Slots[i * 3 + j] == InversePlayer(player):
+					#This is a piece from the enemy. This row can't be
+					#completed. Set count to -1. That way, it won't get to 2
+					#and this row won't be a place the player can win at.
+					count = -1
+				else:
+					#This place isn't filled. Take note of it.
+					empty = i * 3 + j
+			#Check if the row has 2 player pieces and no enemy pieces
+			if count == 2:
+				#It does. Return this row and the place missing
+				return [ROW, empty]
+		#Check if any of the columns has 2 pieces from the player and no piece
+		#from the other player
+		i = 0
+		for j in range(3):
+			#The number of pieces from the player
+			count = 0
+			#The location an empty place in this column
+			empty = -1
+			for i in range(3):
+				#Check for player pieces and enemy pieces
+				if self.Slots[i * 3 + j] == player:
+					#This is a piece from the player. Count it.
+					count += 1
+				elif self.Slots[i * 3 + j] == InversePlayer(player):
+					#This is a piece from the enemy. This column can't be
+					#completed. Set count to -1. That way, it won't get to 2
+					#and this column won't be a place the player can win at.
+					count = -1
+				else:
+					#This place isn't filled. Take note of it.
+					empty = i * 3 + j
+			#Check if the column has 2 player pieces and no enemy pieces
+			if count == 2:
+				#It does. Return this row and the place missing
+				return [COLUMN, empty]
+		#Check if the first diagonal (left to right, top to bottom) is a place
+		#where the player is a move away from winning at
+		i = 0
+		#The number of pieces from the player
+		count = 0
+		#The location an empty place in this diagonal
+		empty = -1
+		for i in range(3):
+			#Check for player pieces and enemy pieces
+			if self.Slots[i * 3 + i] == player:
+				#This is a piece from the player. Count it.
+				count += 1
+			elif self.Slots[i * 3 + i] == InversePlayer(player):
+				#This is a piece from the enemy. This diagonal can't be
+				#completed. Set count to -1. That way, it won't get to 2
+				#and this diagonal won't be a place the player can win at.
+				count = -1
+			else:
+				#This place isn't filled. Take note of it.
+				empty = i * 3 + i
+		#Check if the diagonal has 2 player pieces and no enemy pieces
+		if count == 2:
+			#It does. Return this row and the place missing
+			return [DIAGONAL, empty]
+		#Check if the second diagonal (left to right, bottom to top) is a place
+		#where the player is a move away from winning at
+		i = 0
+		#The number of pieces from the player
+		count = 0
+		for i in range(3):
+			#Check for player pieces and enemy pieces
+			if self.Slots[(i + 1) * 3 - i - 1] == player:
+				#This is a piece from the player. Count it.
+				count += 1
+			elif self.Slots[(i + 1) * 3 - i - 1] == InversePlayer(player):
+				#This is a piece from the enemy. This diagonal can't be
+				#completed. Set count to -1. That way, it won't get to 2
+				#and this diagonal won't be a place the player can win at.
+				count = -1
+			else:
+				#This place isn't filled. Take note of it.
+				empty = (i + 1) * 3 - i - 1
+		#Check if the diagonal has 2 player pieces and no enemy pieces
+		if count == 2:
+			#It does. Return this row and the place missing
+			return [DIAGONAL, empty]
+		return None
+
+#If the user is playing single or multi player. These are constants due to the
+#lack of enums in CASIO's Python interpreter
+SINGLEPLAYER = 0
+MULTIPLAYER = 1
 
 #The difficulties of the AI
-EASY = 1
-MEDIUM = 2
-HARD = 3
+EASY = 0
+MEDIUM = 1
+HARD = 2
 
-#If the user chose singleplayer, tell them to choose a player
-Player = -1
-Difficulty = -1
-if Players == SINGLE_PLAYER:
-	#Know if the user wants	to play as the ball or as the cross
-	while True:
-		#Clear the screen and ask the user
-		Clear()
-		print("Choose a player:\n1 - X\n2 - O\n\n\n")
-		#Get the user's response
-		Player = InputInteger()
-		#Check if the value is valid
-		if Player == PLAYERX or Player == PLAYERO:
-			#It is. Break out of the loop
-			break
+#A function that returns the other player. If the player fed is PLAYERX,
+#PLAYERO will be returned and vice-versa.
+def InversePlayer(player : int):
+	if player == PLAYERX:
+		return PLAYERO
+	else:
+		return PLAYERX
 
-	#Choose the difficulty of the AI
-	while True:
-		#Clear the screen and ask the user
-		Clear()
-		print("Choose the difficulty:\n1 - Easy\n2 - Medium\n3 - Hard\n\n")
-		#Get the user's response
-		Difficulty = InputInteger()
-		#Check if the value is valid
-		if Difficulty == EASY or Difficulty == MEDIUM or Difficulty == HARD:
-			#It is. Break out of the loop
-			break
+#The functions responsible for running the singleplayer AI.
+#Takes in the game board and the AI player
+def EasyAI(board : Board, current : int):
+	#The AI in easy mode only picks a random place where to put its piece. Find
+	#all empty spaces
+	empty = board.EmptyPlaces()
+	#Place a piece in a random empty place
+	board.Slots[empty[random.randrange(len(empty))]] = current
 
-#Pick the first player to play
-Current = random.randint(1, 2)
-
-#The functions that run the game's AI
-def EasyAI():
-	#Pick a random place where to place the piece. Create a list of empty slots
-	free = []
-	for i in range(0, 3):
-		for j in range(0, 3):
-			if Board[i][j] == NO_PLAYER:
-				free.append([i, j])
-
-	#Count the possible lines, columns and diagonals that can branch out of a
-	#piece. Keep track of the lowest impossibility count and create the final
-	#array.
-	lowest = 10
-	final = []
-	for i in range(0, len(free)):
-		impossible = 0
-		#Check if there are no enemy pieces in the same row
-		for j in range(0, 3):
-			if Board[free[i][0]][j] != NO_PLAYER and \
-				Board[free[i][0]][j] != Current:
-				impossible += 1
-				break
-		#Check if there are no enemy pieces in the same column
-		for j in range(0, 3):
-			if Board[j][free[i][1]] != NO_PLAYER and \
-				Board[j][free[i][1]] != Current:
-				impossible += 1
-				break
-		#Check if there are enemy pieces in the same diagonal. First, check if
-		#the piece is in a diagonal
-		if free[i][0] == free[i][1]:
-			#First diagonal. Check if there are no enemy pieces.
-			for j in range(0, 3):
-				if Board[j][j] != NO_PLAYER and Board[j][j] != Current:
-					impossible += 1
-					break
+def MediumAI(board : Board, current : int):
+	#Check if the AI is one step away from winning
+	win = board.PlayerAlmostWinning(current)
+	if win is not None:
+		#The player is one step away from winning. Fill the remaining piece.
+		board.Slots[win[1]] = current
+	else:
+		#The AI isn't a step away from winning. Check if the other player is.
+		win = board.PlayerAlmostWinning(InversePlayer(current))
+		if win is not None:
+			#The other player is one step away from winning. Block their move
+			#by placing a piece.
+			board.Slots[win[1]] = current
 		else:
-			#No diagonal possibility
-			impossible += 1
-		if free[i][0] == 2 - free[i][1]:
-			#Second diagonal. Check if there are no enemy pieces.
-				for j in range(0, 3):
-					if Board[j][2 - j] != NO_PLAYER and \
-						Board[j][2 - j] != Current:
-						impossible += 1
-						break
+			#There is nothing to complete or block. Play as easy AI.
+			EasyAI(board, current)
+
+#This AI isn't that good by itself. It is used in HardAI(). This function
+#also takes in the number of times the AI has played.
+def AdvancedMediumAI(board : Board, current : int, count : int):
+	#Check if the AI is one step away from winning.
+	win = board.PlayerAlmostWinning(current)
+	if win is not None:
+		#The player is one step away from winning. Fill the remaining piece.
+		board.Slots[win[1]] = current
+	else:
+		#The AI isn't a step away from winning. Check if the other player is.
+		win = board.PlayerAlmostWinning(InversePlayer(current))
+		if win is not None:
+			#The other player is one step away from winning. Block their move
+			#by placing a piece.
+			board.Slots[win[1]] = current
 		else:
-			#No diagonal possibility
-			impossible += 1
-		#Update the lowest impossibility	
-		if impossible < lowest:
-			lowest = impossible
+			#There is nothing to complete or block. If the AI is playing first
+			#and this is the second turn, place a piece in the opposite corner.
+			if count == 1:
+				board.Slots[0] = current
+				return
+
+			#Get all places where it is possible to place a piece at.
+			empty = board.EmptyPlaces()
+			#Calculate the number of possible winning outcomes of a piece.
 			final = []
-			final.append(free[i])
-		elif impossible == lowest:
-			final.append(free[i])
-	#Pick a random place
-	place = final[random.randrange(0, len(final))]
-	#Place a piece there
-	Board[place[0]][place[1]] = Current
-
-def MediumAICore():
-	#Check if the player is going to win in the next play
-	winning = PlayerAlmostWinning(Current)
-	if winning is not None:
-		#The AI is going to win. Place the piece.
-		if winning[0] == ROW:
-			#Fill the row with pieces (because two of them are filled by the
-			#AI, it will be only placing a piece)
-			Board[winning[1]][0] = Current
-			Board[winning[1]][1] = Current
-			Board[winning[1]][2] = Current
-		elif winning[0] == COLUMN:
-			#Fill the colum with pieces (because two of them are filled by the
-			#AI, it will be only placing a piece)
-			Board[0][winning[1]] = Current
-			Board[1][winning[1]] = Current
-			Board[2][winning[1]] = Current
-		elif winning[1] == 0:
-			#Fill the first diagonal
-			Board[0][0] = Current
-			Board[1][1] = Current
-			Board[2][2] = Current
-		elif winning[1] == 1:
-			#Fill the second diagonal
-			Board[0][2] = Current
-			Board[1][1] = Current
-			Board[2][0] = Current
-	else:
-		#Know if the other player is about to win
-		if Current == PLAYERX:
-			winning = PlayerAlmostWinning(PLAYERO)
-		else:
-			winning = PlayerAlmostWinning(PLAYERX)
-		#If the other player is almost winning, block their move
-		if winning is not None:
-			#The player is almost winning. Fill the empty place
-			if winning[0] == ROW:
-				#Fill the empty space in the almost winning row
-				for i in range(0, 3):
-					if Board[winning[1]][i] == NO_PLAYER:
-						Board[winning[1]][i] = Current
-			elif winning[0] == COLUMN:
-				#Fill the empty space in the almost winning column
-				for i in range(0, 3):
-					if Board[i][winning[1]] == NO_PLAYER:
-						Board[i][winning[1]] = Current
-			elif winning[1] == 0:
-				#Fill the empty space in the first diagonal
-				for i in range(0, 3):
-					if Board[i][i] == NO_PLAYER:
-						Board[i][i] = Current
-			elif winning[1] == 1:
-				#Fill the empty space in the second diagonal
-				for i in range(0, 3):
-					if Board[2 - i][i] == NO_PLAYER:
-						Board[2 - i][i] = Current	
-		else:
-			#No mandatory move executed
-			return 0
-
-def MediumAI():
-	#Check and execute mandatory moves (quick wins or loss prevention)
-	if MediumAICore() == 0:
-		#No mandatory moves. Place a piece in a random place
-		EasyAI()
-
-PlayCount = 0
-PlayHard = True
-
-def HardAI(IsFirst):
-	global PlayHard
-	#Check and execute mandatory moves (quick wins or loss prevention)
-	if MediumAICore() == 0:
-		#No mandatory moves. Run the hard AI
-		if IsFirst and PlayHard:
-			if PlayCount == 0:
-				Board[2][2] = Current
-			elif PlayCount == 2:
-				if Board[1][1] != NO_PLAYER:
-					PlayHard = False
-					EasyAI()
-				elif Board[0][0] != NO_PLAYER or Board[1][0] != NO_PLAYER or \
-					Board[0][2] != NO_PLAYER or Board[1][2] != NO_PLAYER:
-					Board[2][0] = Current
-				elif Board[2][0] != NO_PLAYER or Board[2][1] != NO_PLAYER \
-					or Board[0][1] != NO_PLAYER:
-					Board[0][2] = Current
-			elif PlayCount == 4:
-				if Board[2][0] == Current:
-					if Board[0][0] != NO_PLAYER or Board[1][0] != NO_PLAYER:
-						Board[0][2] = Current
-					else:
-						Board[0][0] = Current
+			lowest = 100
+			for i in range(len(empty)):
+				#The number of impossibilities for this piece.
+				impossibilities = 0
+				#Check if the row the piece is at has no pieces from the enemy
+				#player. Get the beginning of the row.
+				begginning = (empty[i] // 3) * 3
+				for j in range(begginning, begginning + 3):
+					if board.Slots[j] == InversePlayer(current):
+						#There's a piece from the other player. This row is
+						#impossible.
+						impossibilities += 1
+				#Do the same for columns. I found no formula for calculating
+				#the start of a column so if elses are used.
+				if empty[i] < 3:
+					begginning = empty[i]
+				elif empty[i] < 6:
+					begginning = empty[i] - 3
 				else:
-					if Board[0][1] != NO_PLAYER:
-						Board[2][0] = Current
-					else:
-						Board[0][0] = Current
-		else:
-			#We're not the first player so we can't use the corner strategy.
-			#Play like normal
-			EasyAI()
+					begginning = empty[i] - 6
+				for j in range(begginning, begginning + 7, 3):
+					if board.Slots[j] == InversePlayer(current):
+						#There's a piece from the other player. This column is
+						#impossible.
+						impossibilities += 1
+				#Check if this place is in the first diagonal
+				if empty[i] == 0 or empty[i] == 4 or empty[i] == 8:
+					#It is. Check if there isn't an enemy piece in the first
+					#diagonal.
+					if board.Slots[0] == InversePlayer(current) or \
+						board.Slots[4] == InversePlayer(current) or \
+						board.Slots[8] == InversePlayer(current):
+						#This diagonal has an enemy piece.
+						impossibilities += 1
+				else:
+					#This place isn't in the first diagonal. Filling the first
+					#diagonal would be impossible.
+					impossibilities += 1
+				#Check if this place is in the second diagonal
+				if empty[i] == 2 or empty[i] == 4 or empty[i] == 6:
+					#It is. Check if there isn't an enemy piece in the this
+					#diagonal.
+					if board.Slots[2] == InversePlayer(current) or \
+						board.Slots[4] == InversePlayer(current) or \
+						board.Slots[6] == InversePlayer(current):
+						#This diagonal has an enemy piece.
+						impossibilities += 1
+				else:
+					#This place isn't in the second diagonal. Filling the
+					#second diagonal would be impossible.
+					impossibilities += 1
+				#If this piece has less impossibilities than previous pieces,
+				#remove those from the list and mark this as the lowest
+				#impossibility
+				if impossibilities < lowest:
+					final = []
+					lowest = impossibilities
+				if impossibilities == lowest:
+					#If this is the lowest impossibility, add it to the list
+					final.append(empty[i])
+			#Place a piece in a random empty place
+			board.Slots[final[random.randrange(len(final))]] = current
 
-#Start the game loop
-AIFirst = False
-while True:
-	#Clear the screen
-	Clear()
-
-	#Check if a player won the game
-	winner = PlayerWon()
-	if winner != -1:
-		#Write that the player won
-		if winner == PLAYERX:
-			print("Player X won")
-		elif winner == PLAYERO:
-			print("Player O won")
+#HardAI also takes in whether the AI player is the first or not and the number
+#of times it has played
+def HardAI(board : Board, current : int, IsFirst : bool, count : int):
+	if IsFirst:
+		#Check if the AI is one step away from winning.
+		win = board.PlayerAlmostWinning(current)
+		if win is not None:
+			#The player is one step away from winning. Fill the remaining piece
+			board.Slots[win[1]] = current
 		else:
-			print("It's a tie")
-		#Render the winning board
-		RenderBoard()
-		#Stop the game
-		break
-	
-	#Render the board
-	RenderBoard()
-	#If the user is the one playing (always true in multiplayer)
-	if Players == MULTI_PLAYER or Current == Player:
-		#Ask the user where to place the piece
-		if Current == PLAYERX:
-			print("Piece from X at:")
-		else:
-			print("Piece from O at:")
-		val = InputInteger()
-		#Check if the integer is valid and if the slot is empty
-		if val is not None and val >= 1 and val <= 9 and \
-		Board[math.floor((val - 1) / 3)][(val - 1) % 3] == NO_PLAYER:
-			#Add the piece
-			Board[math.floor((val - 1) / 3)][(val - 1) % 3] = Current
-			#Change the current player
-			if Current == 1:
-				Current = 2
-				PlayCount += 1
+			#The AI isn't a step away from winning. Check if the other player
+			#is
+			win = board.PlayerAlmostWinning(InversePlayer(current))
+			if win is not None:
+				#The other player is one step away from winning. Block their
+				#move by placing a piece.
+				board.Slots[win[1]] = current
 			else:
-				Current = 1
-				PlayCount += 1
+				#The AI is the first to play and there's nothing to block or
+				#complete. Use the corner strategy. Try to place a piece in a
+				#corner.
+				if count != 0:
+					#This is the second or third turn. Place the next piece
+					#differently depending on where the place the enemy placed
+					#its piece
+					if board.Slots[4] == InversePlayer(current):
+						#The enemy played in the middle of the board. It's
+						#impossible to do the corner strategy so, play as
+						#advanced medium AI from now on.
+						AdvancedMediumAI(board, current, count)
+					#If the other player places a piece in certain places,
+					#pick the bottom-left corner
+					elif board.Slots[0] == InversePlayer(current) or \
+						board.Slots[1] == InversePlayer(current) or \
+						board.Slots[2] == InversePlayer(current) or \
+						board.Slots[3] == InversePlayer(current) or \
+						board.Slots[5] == InversePlayer(current):
+						if count == 2:
+							#This is the third play. Place the other corner
+							#based on the enemy pieces.
+							if board.Slots[0] == InversePlayer(current) or\
+								board.Slots[3] == InversePlayer(current):
+								board.Slots[2] = current
+							else:
+								board.Slots[0] = current
+						else:
+							#This is the second turn. Play like so.
+							board.Slots[6] = current
+					else:
+						#Place the other piece on the top-right corner. This
+						#only happens when a piece is played at 8 (7 in the
+						#code)
+						board.Slots[2] = current
+				else:
+					#Place a piece in the corner because this is the 2nd turn.
+					board.Slots[8] = current
 	else:
-		#Run different AIs depending on the difficulty
-		if Difficulty == EASY:
-			EasyAI()
-		elif Difficulty == MEDIUM:
-			MediumAI()
-		elif Difficulty == HARD:
-			if PlayCount == 0:
-				AIFirst = True
-			HardAI(AIFirst)
-		#Pass control onto the next player
-		if Current == PLAYERX:
-				Current = PLAYERO
+		#If the AI isn't the first player, the corner strategy cannot be used.
+		#Play like an improved medium AI. Use -1 to inform that the AI isn't
+		#the first playing.
+		AdvancedMediumAI(board, current, -1)
+
+#The entry-point of the program
+def Main():
+	#Get the system type to know if the screen should be cleared
+	system = GetSystemType()
+	#Ask the user whether to play in single or multi player
+	mode = UserQuestion("Choose the mode:", [ "Singleplayer", "Multiplayer" ] \
+		, system)
+	#In singleplayer, ask for the player and the difficulty
+	if mode == SINGLEPLAYER:
+		player = UserQuestion("Choose the player", [ "X", "O" ], system) + 1
+		difficulty = UserQuestion("Choose the difficulty:", [ "Easy", "Medium"\
+			, "Hard"], system)
+	#Pick a random player to start
+	FirstPlayer = random.randint(PLAYERX, PLAYERO)
+	current = FirstPlayer
+	#Create a board
+	board = Board()
+	#Keep track of the number of times the AI has played
+	PlayCount = 0
+	#Start the game loop
+	while True:
+		#If the game ended (win or tie), show it and end the game loop
+		won = board.PlayerWon()
+		if won is not None:
+			#In PCs, clear the screen
+			if system == PYTHON:
+				ClearScreen()
+			board.Render()
+			#Print a different message depending on who won (or it it's a tie)
+			if won == NO_PLAYER:
+				print("It's a tie")
+			elif won == PLAYERX:
+				print("Player X won")
+			else:
+				print("PLAYER O won")
+			break
+		#The game hasn't ended yet. Continue the game loop
+
+		#In singleplayer, check if it's the AI playing so that the board
+		#doesn't get rendered unnecessarily.
+		if mode == SINGLEPLAYER and current == InversePlayer(player):
+			#Let the AI play. Call a different AI function based on the
+			#difficulty
+			if difficulty == EASY:
+				EasyAI(board, current)
+			elif difficulty == MEDIUM:
+				MediumAI(board, current)
+			else:
+				HardAI(board, current, FirstPlayer == current, PlayCount)
 				PlayCount += 1
+			#Advance to the next player
+			current = InversePlayer(current)
 		else:
-			Current = PLAYERX
-			PlayCount += 1
+			#In PCs, clear the screen for every player move
+			if system == PYTHON:
+				ClearScreen()
+
+			#It's the user playing. Render the board and ask where to place the
+			#piece.
+			board.Render()
+			#Ask the user where to place the piece based on the current player
+			if current == PLAYERX:
+				print("Piece from X at:")
+			else:
+				print("Piece from O at:")
+			place = InputInteger(1, 9)
+			#If the integer is valid and the slot isn't already used, place a
+			#piece and switch to the next player
+			if place is not None and board.Slots[place - 1] == NO_PLAYER:
+				#Remove one from the index because arrays start at 0
+				board.Slots[place - 1] = current
+				current = InversePlayer(current)
+
+
+#If this script is being run and not included, run the main function. Because
+#CASIO calculators don't support __name__, always run the Main function in
+#calculators.
+if __name__ == "__main__" or GetSystemType() == CASIO:
+	Main()
